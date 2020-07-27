@@ -1,7 +1,7 @@
 version: '3.2'
 services:
   elasticsearch:
-    container_name: github_elasticsearch
+    container_name: elasticsearch
     build:
       context: elasticsearch
       args:
@@ -10,13 +10,18 @@ services:
       - "9200:9200"
       - "9300:9300"
     environment:
-      ES_JAVA_OPTS: "-Xmx256m -Xms256m"
+      ES_JAVA_OPTS: "-Xmx1024m -Xms1024m"
       discovery.type: single-node
+      #index.mapping.total_fields.limit: 10000
+    #restart: always
+    volumes:
+      - ./persistent-data/elasticsearch/data:/usr/share/elasticsearch/data
+      - ./elasticsearch/config:/usr/share/elasticsearch/config
     networks:
       - elk
 
   logstash:
-    container_name: github_logstash
+    container_name: logstash
     build:
       context: logstash/
       args:
@@ -31,17 +36,29 @@ services:
       - type: bind
         source: ./logstash/config/logstash.yml
         target: /usr/share/logstash/config/logstash.yml
+      - type: bind
+        source: ./persistent-data/logstash/backup/
+        target: /usr/share/logstash/backup/
+      - type: bind
+        source: ./persistent-data/logstash/restore/
+        target: /usr/share/logstash/restore/
+      - type: bind
+        source: ./ngrok
+        target: /ngrok
     ports:
       - "5400:5400"
+      - "5401:5401"
     environment:
       LS_JAVA_OPTS: "-Xmx2g -Xms2g"
+    restart: always
     networks:
       - elk
     depends_on:
       - elasticsearch
 
+
   kibana:
-    container_name: github_kibana
+    container_name: kibana
     build:
       context: kibana/
       args:
@@ -52,6 +69,22 @@ services:
       - elk
     depends_on:
       - elasticsearch
+ 
+  jenkins:
+    container_name: jenkins
+    image: jenkins/jenkins
+    ports: 
+      - 8080:8080
+      - 50000:50000
+    volumes:
+      - ./persistent-data/jenkins/jenkins_home:/var/jenkins_home
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+      - logstash
+    restart: always
+
 
 networks:
   elk:
